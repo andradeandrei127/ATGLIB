@@ -1,0 +1,8 @@
+{
+  "name": "AtgLib",
+  "description": "Sistema de gestão e análise para bibliotecas escolares com tema Midnight Blue.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
