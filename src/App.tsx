@@ -39,7 +39,9 @@ import {
   Bot,
   Wand2,
   ArrowUpRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Download,
+  Upload
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -213,9 +215,49 @@ export default function App() {
     handleLogin(newUser);
   };
 
-  const handleUpdateUser = (updatedData: Partial<User>) => {
-    if (currentUser) {
-      setCurrentUser({ ...currentUser, ...updatedData });
+  const handleUpdateUser = (updatedData: Partial<User>, targetId?: string) => {
+    const idToUpdate = targetId || selectedMemberId || currentUser?.id;
+    if (!idToUpdate) return;
+
+    // Update state for currentUser if they are the one being edited
+    if (currentUser?.id === idToUpdate) {
+      setCurrentUser(prev => prev ? { ...prev, ...updatedData } : null);
+    }
+
+    // Update persistent registeredUsers list
+    setRegisteredUsers(prev => prev.map(u => u.id === idToUpdate ? { ...u, ...updatedData } : u));
+
+    // Update members list
+    setMembers(prev => prev.map(m => m.id === idToUpdate ? { ...m, ...updatedData } : m));
+    
+    // Log activity
+    if (updatedData.name || updatedData.grade) {
+      const userName = members.find(m => m.id === idToUpdate)?.name || currentUser?.name || 'Usuário';
+      setActivities(prev => [{
+        id: `ACT-${Date.now()}`,
+        user: 'Sistema',
+        action: `Perfil de ${userName} atualizado`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'alert'
+      }, ...prev]);
+    }
+  };
+
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
     }
   };
 
@@ -386,18 +428,17 @@ export default function App() {
           return (
             <ProfileView 
               onBack={() => {
-                if (selectedMemberId) {
-                  setSelectedMemberId(null);
-                  setCurrentView('users');
-                } else {
-                  setCurrentView('dash');
-                }
+                const wasSelecting = !!selectedMemberId;
+                setSelectedMemberId(null);
+                setCurrentView(wasSelecting ? 'users' : 'dash');
               }} 
-              isManagement={true} 
+              isManagement={currentUser?.role === 'management' && selectedMemberId !== null && selectedMemberId !== currentUser.id} 
               user={targetUser as User} 
-              onUpdateUser={handleUpdateUser} 
+              onUpdateUser={(data) => handleUpdateUser(data, targetUser?.id)} 
               books={books} 
               onLogout={handleLogout}
+              onInstall={handleInstallClick}
+              showInstall={!!deferredPrompt}
             />
           );
         }
@@ -417,7 +458,7 @@ export default function App() {
           />
         );
         case 'catalog': return <CatalogView books={books} onToggleReservation={handleToggleReservation} currentUser={currentUser} />;
-        case 'profile': return <ProfileView onBack={() => setCurrentView('dash')} isManagement={false} user={currentUser!} onUpdateUser={handleUpdateUser} books={books} onLogout={handleLogout} />;
+        case 'profile': return <ProfileView onBack={() => setCurrentView('dash')} isManagement={false} user={currentUser!} onUpdateUser={handleUpdateUser} books={books} onLogout={handleLogout} onInstall={handleInstallClick} showInstall={!!deferredPrompt} />;
         default: return <StudentDashboardView user={currentUser!} onSeeCatalog={() => setCurrentView('catalog')} books={books} onAiHelp={handleGetAiHelp} />;
       }
     }
@@ -1308,11 +1349,15 @@ function FilterBadge({ label, active = false, onClick }: { label: string, active
   );
 }
 
-function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout }: { onBack: () => void, isManagement: boolean, user: User, onUpdateUser: (data: Partial<User>) => void, books: Book[], onLogout?: () => void }) {
+function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout, onInstall, showInstall }: { onBack: () => void, isManagement: boolean, user: User, onUpdateUser: (data: Partial<User>) => void, books: Book[], onLogout?: () => void, onInstall?: () => void, showInstall?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(user.name);
   const [editGrade, setEditGrade] = useState(user.grade || '');
   const [activeTab, setActiveTab] = useState('Ativos');
+
+  // Logic for allowing editing
+  // Admin can edit anyone, Students can only edit themselves (controlled by isManagement prop passed from app)
+  const canEdit = true; // Component itself allows toggling, permissions are handled by parent logic passing isManagement correctly
 
   const userLoans = books.filter(b => b.borrowerId === user.id);
   const points = userLoans.length * 5;
@@ -1342,14 +1387,13 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
           </button>
           <h1 className="text-lg font-bold tracking-tight text-white">{isManagement ? 'Gestão de Membro' : 'Meu Perfil'}</h1>
         </div>
-        {!isManagement && (
-          <button 
-            onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-            className="text-xs font-bold text-sky-400 uppercase tracking-widest bg-sky-400/10 px-4 py-2 rounded-full border border-sky-400/20"
-          >
-            {isEditing ? 'Salvar' : 'Editar'}
-          </button>
-        )}
+        
+        <button 
+          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+          className="text-xs font-bold text-sky-400 uppercase tracking-widest bg-sky-400/10 px-4 py-2 rounded-full border border-sky-400/20"
+        >
+          {isEditing ? 'Salvar' : 'Editar'}
+        </button>
       </header>
 
       <section className="flex flex-col items-center p-8 bg-[#0f172a] mx-4 mt-6 rounded-3xl shadow-2xl border border-slate-800">
@@ -1361,7 +1405,7 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
           />
           <div className="absolute bottom-2 right-2 bg-emerald-500 size-6 rounded-full border-4 border-[#0f172a] shadow-md"></div>
           
-          {!isManagement && isEditing && (
+          {isEditing && (
             <div className="absolute inset-x-0 -bottom-2 flex flex-col items-center gap-2">
               <label className="flex items-center justify-center bg-sky-500 text-[#020617] size-10 rounded-full cursor-pointer shadow-lg active:scale-95 transition-transform border-4 border-[#1e293b]">
                 <Plus size={20} />
@@ -1371,9 +1415,9 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
           )}
         </div>
 
-        {!isManagement && isEditing && (
+        {isEditing && (
           <div className="mt-8 w-full border-t border-slate-800/50 pt-6">
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center mb-4">Ou escolha um Avatar de St. Jude</h4>
+            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest text-center mb-4">Escolha um Avatar AtgLib</h4>
             <div className="grid grid-cols-4 gap-3 place-items-center">
               {PREDEFINED_AVATARS.map((avatarUrl, idx) => (
                 <button
@@ -1391,30 +1435,38 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
         <div className="mt-6 text-center w-full max-w-[240px]">
           {isEditing ? (
             <div className="space-y-3">
-              <input 
-                type="text" 
-                value={editName} 
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-2 text-center text-white font-bold outline-none focus:border-sky-500"
-                placeholder="Seu Nome"
-              />
-              <input 
-                type="text" 
-                value={editGrade} 
-                onChange={(e) => setEditGrade(e.target.value)}
-                className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-2 text-center text-slate-300 text-sm outline-none focus:border-sky-500"
-                placeholder="Sua Turma"
-              />
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nome Completo</label>
+                <input 
+                  type="text" 
+                  value={editName} 
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-3 text-center text-white font-bold outline-none focus:border-sky-500"
+                  placeholder="Nome"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Série / Classe</label>
+                <input 
+                  type="text" 
+                  value={editGrade} 
+                  onChange={(e) => setEditGrade(e.target.value)}
+                  className="w-full bg-[#1e293b] border border-slate-700 rounded-xl px-4 py-3 text-center text-white font-bold outline-none focus:border-sky-500"
+                  placeholder="Série"
+                />
+              </div>
             </div>
           ) : (
             <>
-              <h2 className="text-2xl font-bold tracking-tight text-white">{user.name}</h2>
-              <p className="text-slate-400 font-medium mt-1">{user.grade || 'Série não informada'}</p>
+              <h2 className="text-2xl font-black tracking-tight text-white uppercase">{user.name}</h2>
+              <p className="text-sky-400 font-black uppercase text-[10px] tracking-[0.2em] mt-1">
+                {user.role === 'management' ? 'Gestão de Sistema' : (user.grade || 'Membro Ativo')}
+              </p>
             </>
           )}
-          <div className="flex items-center justify-center gap-1.5 mt-2 text-slate-500 text-sm">
-            <ScanBarcode size={16} />
-            <span className="tracking-wide">{user.id}</span>
+          <div className="flex items-center justify-center gap-1.5 mt-2 text-slate-600 text-xs font-black uppercase tracking-widest bg-slate-800/30 py-1.5 px-3 rounded-md border border-white/5">
+            <ScanBarcode size={14} className="text-sky-500" />
+            <span>{user.id}</span>
           </div>
         </div>
         
@@ -1444,6 +1496,16 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
                 <Settings size={20} />
               </button>
             </div>
+            
+            {showInstall && onInstall && (
+              <button 
+                onClick={onInstall}
+                className="w-full flex items-center justify-center gap-2 h-14 bg-sky-500/10 text-sky-400 rounded-2xl font-bold border border-sky-500/20 active:scale-95 transition-transform mb-2"
+              >
+                <Download size={18} />
+                <span>Instalar Aplicativo (PWA)</span>
+              </button>
+            )}
             
             {onLogout && (
               <button 
