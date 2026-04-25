@@ -1137,9 +1137,9 @@ function DirectoryView({ members, onSelectUser, onDeleteMember, onAddMember }: {
   const [newRole, setNewRole] = useState<UserRole>('student');
 
   const filteredMembers = members.filter(member => 
-    member.name.toLowerCase().includes(search.toLowerCase()) ||
-    member.id.toLowerCase().includes(search.toLowerCase()) ||
-    member.role.toLowerCase().includes(search.toLowerCase())
+    (member.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (member.id?.toLowerCase() || '').includes(search.toLowerCase()) ||
+    (member.role?.toLowerCase() || '').includes(search.toLowerCase())
   );
 
   const handleAddSubmit = (e: FormEvent) => {
@@ -1819,7 +1819,7 @@ function LoginView({ onLogin, onRegister, registeredUsers }: { onLogin: (user: U
         return;
       }
 
-      const userExists = registeredUsers.some(u => u.email.toLowerCase() === email.toLowerCase());
+      const userExists = registeredUsers.some(u => (u.email?.toLowerCase() || '') === email.toLowerCase());
       if (userExists) {
         setError('Parece que este e-mail já tem uma conta. Tente fazer login ou use outro e-mail.');
         return;
@@ -1852,7 +1852,7 @@ function LoginView({ onLogin, onRegister, registeredUsers }: { onLogin: (user: U
       onRegister(newUser);
     } else {
       // Login Logic
-      const userByEmail = registeredUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
+      const userByEmail = registeredUsers.find(u => (u.email?.toLowerCase() || '') === email.toLowerCase());
       
       if (!userByEmail) {
         setError('Não encontramos nenhuma conta com este e-mail. Verifique a digitação ou crie uma nova conta.');
@@ -2143,8 +2143,8 @@ function CatalogView({ books, onToggleReservation, currentUser }: { books: Book[
   const genres = ['all', ...COMMON_GENRES];
 
   const filteredBooks = books.filter(book => {
-    const matchesSearch = book.title.toLowerCase().includes(search.toLowerCase()) ||
-                         book.author.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = (book.title?.toLowerCase() || '').includes(search.toLowerCase()) ||
+                         (book.author?.toLowerCase() || '').includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'all' || book.status === statusFilter;
     const matchesGenre = genreFilter === 'all' || book.genre === genreFilter;
     
