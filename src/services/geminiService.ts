@@ -1,9 +1,24 @@
 import { GoogleGenAI } from "@google/genai";
 import { Book, User } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAi() {
+  if (!aiInstance) {
+    const apiKey = typeof process !== 'undefined' && process.env ? process.env.GEMINI_API_KEY : undefined;
+    if (!apiKey) {
+      console.warn("GEMINI_API_KEY is not defined. AI features will be disabled.");
+      return null;
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
 
 export async function getLibraryRecommendations(user: User, availableBooks: Book[]) {
+  const ai = getAi();
+  if (!ai) return "Recomendações não disponíveis sem chave de IA.";
+  
   const model = "gemini-3-flash-preview";
   
   const booksList = availableBooks
@@ -36,6 +51,9 @@ export async function getLibraryRecommendations(user: User, availableBooks: Book
 }
 
 export async function getBookInsight(book: Book) {
+  const ai = getAi();
+  if (!ai) return null;
+  
   const model = "gemini-3-flash-preview";
   const prompt = `Fale brevemente (em 3 frases) sobre a importância e os temas principais do livro "${book.title}" de ${book.author}.`;
 

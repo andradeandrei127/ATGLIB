@@ -63,10 +63,22 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dash');
   const [registeredUsers, setRegisteredUsers] = useState<AuthUser[]>(() => {
-    const saved = localStorage.getItem('atglib_users_v2');
-    const users = saved ? JSON.parse(saved) : [];
-    // Ensure at least one admin exists for initial setup if empty
-    if (users.length === 0) {
+    try {
+      const saved = localStorage.getItem('atglib_users_v2');
+      const users = saved ? JSON.parse(saved) : [];
+      // Ensure at least one admin exists for initial setup if empty
+      if (!Array.isArray(users) || users.length === 0) {
+        return [{
+          id: 'ADMIN-001',
+          name: 'Administrador',
+          avatar: PREDEFINED_AVATARS[0],
+          role: 'management',
+          password: 'admin'
+        }];
+      }
+      return users;
+    } catch (e) {
+      console.error('Falha ao carregar usuários:', e);
       return [{
         id: 'ADMIN-001',
         name: 'Administrador',
@@ -75,38 +87,65 @@ export default function App() {
         password: 'admin'
       }];
     }
-    return users;
   });
 
   const [books, setBooks] = useState<Book[]>(() => {
-    const saved = localStorage.getItem('atglib_books_v2');
-    return saved ? JSON.parse(saved) : MOCK_BOOKS;
-  });
-  const [members, setMembers] = useState<Member[]>(() => {
-    const saved = localStorage.getItem('atglib_members_v2');
-    const loadedMembers = saved ? JSON.parse(saved) : MOCK_MEMBERS;
-    // Ensure the admin is also in the members list if we just added it
-    if (loadedMembers.length === 0 && registeredUsers.length > 0) {
-      return registeredUsers.map(u => ({
-        id: u.id,
-        name: u.name,
-        role: u.role,
-        grade: u.grade,
-        avatar: u.avatar,
-        activeLoans: 0,
-        points: 0,
-        status: 'active'
-      }));
+    try {
+      const saved = localStorage.getItem('atglib_books_v2');
+      const loaded = saved ? JSON.parse(saved) : MOCK_BOOKS;
+      return Array.isArray(loaded) ? loaded : MOCK_BOOKS;
+    } catch (e) {
+      console.error('Falha ao carregar livros:', e);
+      return MOCK_BOOKS;
     }
-    return loadedMembers;
+  });
+  
+  const [members, setMembers] = useState<Member[]>(() => {
+    try {
+      const saved = localStorage.getItem('atglib_members_v2');
+      const loadedMembers = saved ? JSON.parse(saved) : MOCK_MEMBERS;
+      
+      const safeLoaded = Array.isArray(loadedMembers) ? loadedMembers : MOCK_MEMBERS;
+
+      // Ensure the admin is also in the members list if we just added it
+      if (safeLoaded.length === 0 && registeredUsers.length > 0) {
+        return registeredUsers.map(u => ({
+          id: u.id,
+          name: u.name,
+          role: u.role,
+          grade: u.grade,
+          avatar: u.avatar,
+          activeLoans: 0,
+          points: 0,
+          status: 'active'
+        }));
+      }
+      return safeLoaded;
+    } catch (e) {
+      console.error('Falha ao carregar membros:', e);
+      return MOCK_MEMBERS;
+    }
   });
   const [activities, setActivities] = useState<Activity[]>(() => {
-    const saved = localStorage.getItem('atglib_activities_v2');
-    return saved ? JSON.parse(saved) : MOCK_ACTIVITIES;
+    try {
+      const saved = localStorage.getItem('atglib_activities_v2');
+      const loaded = saved ? JSON.parse(saved) : MOCK_ACTIVITIES;
+      return Array.isArray(loaded) ? loaded : MOCK_ACTIVITIES;
+    } catch (e) {
+      console.error('Falha ao carregar atividades:', e);
+      return MOCK_ACTIVITIES;
+    }
   });
+  
   const [libraryConfig, setLibraryConfig] = useState<LibraryConfig>(() => {
-    const saved = localStorage.getItem('atglib_config_v2');
-    return saved ? JSON.parse(saved) : LIBRARY_CONFIG;
+    try {
+      const saved = localStorage.getItem('atglib_config_v2');
+      const loaded = saved ? JSON.parse(saved) : LIBRARY_CONFIG;
+      return (loaded && typeof loaded === 'object') ? loaded : LIBRARY_CONFIG;
+    } catch (e) {
+      console.error('Falha ao carregar config:', e);
+      return LIBRARY_CONFIG;
+    }
   });
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [aiRecommendations, setAiRecommendations] = useState<string | null>(null);
