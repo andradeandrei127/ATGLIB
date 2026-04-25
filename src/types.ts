@@ -12,6 +12,7 @@ export interface User {
   avatar: string;
   grade?: string;
   email?: string;
+  status?: 'active' | 'inactive' | 'blocked' | 'banned';
 }
 
 export interface AuthUser extends User {

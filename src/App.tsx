@@ -41,7 +41,9 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   Download,
-  Upload
+  Upload,
+  Ban,
+  ShieldOff
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -272,6 +274,10 @@ export default function App() {
     const member = members.find(m => m.id === memberId);
 
     if (book && member && book.status === 'available') {
+      if (member.status === 'blocked' || member.status === 'banned') {
+        alert('Este membro está bloqueado ou banido e não pode realizar novos empréstimos.');
+        return;
+      }
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + 15);
       const dueDateStr = dueDate.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
@@ -333,6 +339,13 @@ export default function App() {
   const handleToggleReservation = (bookId: string) => {
     if (!currentUser) return;
     
+    // Check user status
+    const member = members.find(m => m.id === currentUser.id);
+    if (member && (member.status === 'blocked' || member.status === 'banned')) {
+       alert('Você está bloqueado ou banido e não pode realizar reservas.');
+       return;
+    }
+    
     setBooks(prev => prev.map(b => {
       if (b.id === bookId) {
         if (b.isReserved && b.reservedById === currentUser.id) {
@@ -352,6 +365,22 @@ export default function App() {
       id: Math.random().toString(36).substr(2, 9),
       user: 'Sistema',
       action: `Usuário ${memberId} removido`,
+      time: 'Agora',
+      type: 'alert'
+    }, ...prev]);
+  };
+
+  const handleUpdateMemberStatus = (id: string, status: 'active' | 'blocked' | 'banned') => {
+    const memberName = members.find(m => m.id === id)?.name || id;
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, status } : m));
+    setRegisteredUsers(prev => prev.map(u => u.id === id ? { ...u, status } : u));
+    if (currentUser?.id === id && (status === 'blocked' || status === 'banned')) {
+      handleLogout();
+    }
+    setActivities(prev => [{
+      id: `ACT-${Date.now()}`,
+      user: 'Gestão',
+      action: `Status de ${memberName} alterado para ${status.toUpperCase()}`,
       time: 'Agora',
       type: 'alert'
     }, ...prev]);
@@ -421,6 +450,7 @@ export default function App() {
             }} 
             onDeleteMember={handleDeleteMember} 
             onAddMember={handleAddMember} 
+            onUpdateStatus={handleUpdateMemberStatus}
           />
         );
         case 'profile': {
@@ -439,6 +469,7 @@ export default function App() {
               onLogout={handleLogout}
               onInstall={handleInstallClick}
               showInstall={!!deferredPrompt}
+              onUpdateStatus={handleUpdateMemberStatus}
             />
           );
         }
@@ -1128,7 +1159,7 @@ function BookRegistration({ onAddBook, onCancel }: { onAddBook: (book: any) => v
   );
 }
 
-function DirectoryView({ members, onSelectUser, onDeleteMember, onAddMember }: { members: Member[], onSelectUser: (id: string) => void, onDeleteMember: (id: string) => void, onAddMember: (member: Member) => void }) {
+function DirectoryView({ members, onSelectUser, onDeleteMember, onAddMember, onUpdateStatus }: { members: Member[], onSelectUser: (id: string) => void, onDeleteMember: (id: string) => void, onAddMember: (member: Member) => void, onUpdateStatus: (id: string, status: 'active' | 'blocked' | 'banned') => void }) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('Série');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1239,16 +1270,72 @@ function DirectoryView({ members, onSelectUser, onDeleteMember, onAddMember }: {
                     {member.activeLoans} empréstimos • {member.points} pts
                   </p>
                   {member.role !== 'management' && (
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteMember(member.id);
-                      }}
-                      className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
-                      title="Excluir Usuário"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {member.status === 'active' ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Bloquear temporariamente ${member.name}? O usuário não poderá realizar novos empréstimos ou reservas.`)) {
+                              onUpdateStatus(member.id, 'blocked');
+                            }
+                          }}
+                          className="p-2 text-slate-600 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition-all"
+                          title="Bloquear Temporariamente"
+                        >
+                          <ShieldOff size={16} />
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateStatus(member.id, 'active');
+                          }}
+                          className="p-2 text-orange-500 bg-orange-500/10 rounded-lg transition-all"
+                          title="Desbloquear"
+                        >
+                          <ShieldCheck size={16} />
+                        </button>
+                      )}
+                      
+                      {member.status !== 'banned' ? (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm(`Deseja realmente BANIR permanentemente ${member.name}?`)) {
+                              onUpdateStatus(member.id, 'banned');
+                            }
+                          }}
+                          className="p-2 text-slate-600 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
+                          title="Banir Permanentemente"
+                        >
+                          <Ban size={16} />
+                        </button>
+                      ) : (
+                         <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateStatus(member.id, 'active');
+                          }}
+                          className="p-2 text-rose-500 bg-rose-500/10 rounded-lg transition-all"
+                          title="Revogar Banimento"
+                        >
+                          <ShieldCheck size={16} />
+                        </button>
+                      )}
+
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Excluir definitivamente ${member.name}? Esta ação não pode ser desfeita.`)) {
+                            onDeleteMember(member.id);
+                          }
+                        }}
+                        className="p-2 text-slate-600 hover:text-rose-600 hover:bg-rose-600/10 rounded-lg transition-all ml-1"
+                        title="Excluir Usuário"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1349,7 +1436,7 @@ function FilterBadge({ label, active = false, onClick }: { label: string, active
   );
 }
 
-function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout, onInstall, showInstall }: { onBack: () => void, isManagement: boolean, user: User, onUpdateUser: (data: Partial<User>) => void, books: Book[], onLogout?: () => void, onInstall?: () => void, showInstall?: boolean }) {
+function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout, onInstall, showInstall, onUpdateStatus }: { onBack: () => void, isManagement: boolean, user: User, onUpdateUser: (data: Partial<User>) => void, books: Book[], onLogout?: () => void, onInstall?: () => void, showInstall?: boolean, onUpdateStatus?: (id: string, status: 'active' | 'blocked' | 'banned') => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(user.name);
   const [editGrade, setEditGrade] = useState(user.grade || '');
@@ -1357,7 +1444,7 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
 
   // Logic for allowing editing
   // Admin can edit anyone, Students can only edit themselves (controlled by isManagement prop passed from app)
-  const canEdit = true; // Component itself allows toggling, permissions are handled by parent logic passing isManagement correctly
+  const canEdit = true; 
 
   const userLoans = books.filter(b => b.borrowerId === user.id);
   const points = userLoans.length * 5;
@@ -1388,12 +1475,58 @@ function ProfileView({ onBack, isManagement, user, onUpdateUser, books, onLogout
           <h1 className="text-lg font-bold tracking-tight text-white">{isManagement ? 'Gestão de Membro' : 'Meu Perfil'}</h1>
         </div>
         
-        <button 
-          onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-          className="text-xs font-bold text-sky-400 uppercase tracking-widest bg-sky-400/10 px-4 py-2 rounded-full border border-sky-400/20"
-        >
-          {isEditing ? 'Salvar' : 'Editar'}
-        </button>
+        <div className="flex items-center gap-2">
+          {isManagement && onUpdateStatus && (
+            <div className="flex gap-1 mr-2">
+              {user.status === 'blocked' ? (
+                <button 
+                  onClick={() => onUpdateStatus(user.id, 'active')}
+                  className="p-2 bg-orange-500/10 text-orange-400 rounded-xl border border-orange-500/20"
+                  title="Desbloquear"
+                >
+                  <ShieldCheck size={18} />
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    if (confirm(`Bloquear temporariamente ${user.name}? O usuário não poderá realizar novos empréstimos ou reservas.`)) {
+                      onUpdateStatus(user.id, 'blocked');
+                    }
+                  }}
+                  className="p-2 bg-slate-800 text-slate-400 hover:text-orange-400 rounded-xl border border-slate-700"
+                  title="Bloquear Temporariamente"
+                >
+                  <ShieldOff size={18} />
+                </button>
+              )}
+              
+              <button 
+                onClick={() => {
+                  if (user.status === 'banned') {
+                    onUpdateStatus(user.id, 'active');
+                  } else if (confirm(`Deseja realmente BANIR permanentemente ${user.name}? Esta ação impede qualquer acesso futuro.`)) {
+                    onUpdateStatus(user.id, 'banned');
+                  }
+                }}
+                className={`p-2 rounded-xl border transition-all ${
+                  user.status === 'banned' 
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' 
+                    : 'bg-slate-800 text-slate-400 hover:text-rose-500 border-slate-700'
+                }`}
+                title={user.status === 'banned' ? 'Revogar Banimento' : 'Banir permanentemente'}
+              >
+                {user.status === 'banned' ? <ShieldCheck size={18} /> : <Ban size={18} />}
+              </button>
+            </div>
+          )}
+
+          <button 
+            onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+            className="text-xs font-bold text-sky-400 uppercase tracking-widest bg-sky-400/10 px-4 py-2 rounded-full border border-sky-400/20"
+          >
+            {isEditing ? 'Salvar' : 'Editar'}
+          </button>
+        </div>
       </header>
 
       <section className="flex flex-col items-center p-8 bg-[#0f172a] mx-4 mt-6 rounded-3xl shadow-2xl border border-slate-800">
@@ -1861,6 +1994,16 @@ function LoginView({ onLogin, onRegister, registeredUsers }: { onLogin: (user: U
 
       if (userByEmail.password !== password) {
         setError('Senha incorreta. Se você esqueceu, tente criar uma nova conta ou peça ajuda na biblioteca.');
+        return;
+      }
+
+      if (userByEmail.status === 'banned') {
+        setError('Esta conta foi permanentemente banida do sistema por violação das regras.');
+        return;
+      }
+
+      if (userByEmail.status === 'blocked') {
+        setError('Seu acesso está temporariamente bloqueado. Procure a administração da biblioteca.');
         return;
       }
       

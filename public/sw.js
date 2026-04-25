@@ -2,9 +2,7 @@ const CACHE_NAME = 'atglib-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json',
-  '/assets/index.css' // Vite builds often use this path, though it's hashed. 
-  // In a real build, we'd use a plugin to generate this list.
+  '/manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
